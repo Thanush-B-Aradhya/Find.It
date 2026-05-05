@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FindIt - Community Lost &amp; Found Board</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <nav>
+    <a class="nav-logo" href="#">
+      <span class="dot"></span>
+      FindIt
+    </a>
+    <div class="nav-stats">
+      <div class="nav-stat"><strong id="nav-total">0</strong> total items</div>
+      <div class="nav-stat nav-stat-lost"><strong id="nav-lost">0</strong> lost</div>
+      <div class="nav-stat nav-stat-found"><strong id="nav-found">0</strong> found</div>
+    </div>
+    <div class="nav-links">
+      <button class="nav-btn" onclick="showHowItWorks()">How It Works</button>
+      <button class="nav-btn primary" onclick="openPostModal('lost')">+ Post Item</button>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="hero-glow"></div>
+    <div class="hero-tag">
+      <span class="hero-tag-dot"></span>
+      Community-Powered Platform
+    </div>
+    <h1>Lost Something?<br><span class="gradient">Let&apos;s Find It Together.</span></h1>
+    <p>A real-time community board to report lost and found items in your neighborhood. Post, search, and connect to get things home.</p>
+    <div class="hero-actions">
+      <button class="btn btn-primary" onclick="openPostModal('lost')">Report Lost Item</button>
+      <button class="btn btn-secondary" onclick="openPostModal('found')">Report Found Item</button>
+    </div>
+  </section>
+
+  <section class="stats-strip">
+    <div class="stat-cell lost">
+      <span class="num" id="stat-lost">0</span>
+      <span class="label">Lost Items</span>
+    </div>
+    <div class="stat-cell found">
+      <span class="num" id="stat-found">0</span>
+      <span class="label">Found Items</span>
+    </div>
+    <div class="stat-cell accent">
+      <span class="num" id="stat-resolved">0</span>
+      <span class="label">Resolved</span>
+    </div>
+    <div class="stat-cell">
+      <span class="num" id="stat-total">0</span>
+      <span class="label">Total Posts</span>
+    </div>
+  </section>
+
+  <main class="main">
+    <div class="toolbar">
+      <div class="search-wrap">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"></circle>
+          <path d="m21 21-4.35-4.35"></path>
+        </svg>
+        <input class="search-input" type="text" id="searchInput" placeholder="Search by name, location, or description..." oninput="scheduleRender()">
+      </div>
+
+      <select class="filter-select" id="categoryFilter" onchange="renderCards()">
+        <option value="all">All Categories</option>
+        <option value="electronics">Electronics</option>
+        <option value="pets">Pets</option>
+        <option value="accessories">Accessories</option>
+        <option value="documents">Documents</option>
+        <option value="clothing">Clothing</option>
+        <option value="keys">Keys</option>
+        <option value="bags">Bags</option>
+        <option value="other">Other</option>
+      </select>
+
+      <select class="filter-select" id="sortFilter" onchange="renderCards()">
+        <option value="newest">Newest First</option>
+        <option value="oldest">Oldest First</option>
+      </select>
+
+      <div class="filter-tabs">
+        <button class="filter-tab active" onclick="setTab(this, 'all')">All</button>
+        <button class="filter-tab lost" onclick="setTab(this, 'lost')">Lost</button>
+        <button class="filter-tab found" onclick="setTab(this, 'found')">Found</button>
+        <button class="filter-tab resolved" onclick="setTab(this, 'resolved')">Resolved</button>
+      </div>
+    </div>
+
+    <div class="section-header">
+      <span class="section-title">Community Board</span>
+      <span class="section-count" id="itemCount">0 items</span>
+    </div>
+
+    <div class="cards-grid" id="cardsGrid"></div>
+  </main>
+
+  <footer>
+    <div class="footer-logo">FindIt</div>
+    <p>Community Lost &amp; Found Board - Full Stack Project</p>
+    <div class="tech-stack">
+      <span class="tech-pill">HTML5</span>
+      <span class="tech-pill">CSS3</span>
+      <span class="tech-pill">JavaScript</span>
+      <span class="tech-pill">Node.js</span>
+      <span class="tech-pill">Express</span>
+      <span class="tech-pill">MongoDB</span>
+    </div>
+    <p class="footer-note">Designed and built for a Full Stack Development showcase.</p>
+  </footer>
+
+  <div class="overlay" id="postOverlay" onclick="closePostModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <span class="modal-title" id="modalTitle">Post an Item</span>
+        <button class="modal-close" onclick="closePostModal()">&times;</button>
+      </div>
+
+      <div class="form-group">
+        <label>Report Type</label>
+        <div class="report-type-display">
+          <span class="report-type-pill lost" id="reportTypeBadge">Lost Report</span>
+          <p class="form-note" id="typeHelpText">This form will create a lost item report.</p>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Photos *</label>
+        <input type="file" id="fPhoto" accept="image/png,image/jpeg,image/webp,image/gif" onchange="handlePhotoChange(event)">
+        <p class="form-note">Upload at least one clear photo of the item. A photo is required for every post.</p>
+        <div class="photo-preview-shell">
+          <div class="photo-preview empty" id="photoPreview">
+            <span class="photo-placeholder-title">Photo required</span>
+            <span class="photo-placeholder-text">Add a clear image of the item before posting it to the board.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Item Name *</label>
+          <input type="text" id="fName" placeholder="e.g. Blue Wallet" maxlength="60">
+        </div>
+        <div class="form-group">
+          <label>Category</label>
+          <select id="fCategory">
+            <option value="other">Other</option>
+            <option value="electronics">Electronics</option>
+            <option value="pets">Pets</option>
+            <option value="accessories">Accessories</option>
+            <option value="documents">Documents</option>
+            <option value="clothing">Clothing</option>
+            <option value="keys">Keys</option>
+            <option value="bags">Bags</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Description *</label>
+        <textarea id="fDesc" placeholder="Describe the item - color, size, and distinctive details..."></textarea>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Location</label>
+          <input type="text" id="fLocation" placeholder="e.g. City Center">
+        </div>
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" id="fDate">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Your Name</label>
+          <input type="text" id="fContactName" placeholder="Your name">
+        </div>
+        <div class="form-group">
+          <label>Phone / WhatsApp</label>
+          <input type="tel" id="fPhone" placeholder="+91 XXXXX XXXXX">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="fEmail" placeholder="you@example.com">
+      </div>
+
+      <div class="form-group">
+        <label>Reward / Note</label>
+        <input type="text" id="fReward" placeholder="e.g. Reward offered or sentimental value">
+      </div>
+
+      <div class="form-submit-row">
+        <button class="btn btn-secondary" onclick="closePostModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitPost()" id="submitBtn">Post Item</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="detailOverlay" onclick="closeDetailModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <span class="modal-title" id="detailModalTitle">Item Details</span>
+        <button class="modal-close" onclick="closeDetailModal()">&times;</button>
+      </div>
+      <div id="detailContent"></div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
