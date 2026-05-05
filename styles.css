@@ -32,6 +32,10 @@
   padding: 0;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html {
   scroll-behavior: smooth;
 }
@@ -388,6 +392,7 @@ nav {
 .filter-select,
 input[type="text"],
 input[type="email"],
+input[type="password"],
 input[type="tel"],
 input[type="date"],
 textarea,
@@ -408,6 +413,7 @@ select {
 .filter-select,
 input[type="text"],
 input[type="email"],
+input[type="password"],
 input[type="tel"],
 input[type="date"],
 textarea,

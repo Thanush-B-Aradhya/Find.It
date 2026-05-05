@@ -19,10 +19,27 @@
       <div class="nav-stat nav-stat-found"><strong id="nav-found">0</strong> found</div>
     </div>
     <div class="nav-links">
+      <span class="nav-user" id="navUserText" hidden></span>
       <button class="nav-btn" onclick="showHowItWorks()">How It Works</button>
       <button class="nav-btn primary" onclick="openPostModal('lost')">+ Post Item</button>
+      <button class="nav-btn" id="logoutBtn" onclick="logout()" hidden>Log Out</button>
     </div>
   </nav>
+
+  <section class="auth-gate" id="authGate" hidden>
+    <div class="auth-card">
+      <div class="auth-badge">USN Login</div>
+      <h2>Sign in to FindIt</h2>
+      <p class="auth-copy">Only users listed in the approved USN sheet can log in. USN matching is case-insensitive.</p>
+      <form class="auth-form" id="loginForm">
+        <input type="text" id="loginUsn" placeholder="Enter USN (e.g. ENG24AS0001)" autocomplete="username" required>
+        <input type="password" id="loginPassword" placeholder="Enter Password" autocomplete="current-password" required>
+        <button class="btn btn-primary auth-btn" id="loginBtn" type="submit">Log In</button>
+      </form>
+      <p class="auth-helper">Password and username are fixed by the admin list and cannot be changed in this app.</p>
+      <p class="auth-message info" id="authMessage">Enter your USN and password to continue.</p>
+    </div>
+  </section>
 
   <section class="hero">
     <div class="hero-glow"></div>

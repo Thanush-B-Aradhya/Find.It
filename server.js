@@ -4,14 +4,15 @@ const path = require("path");
 const express = require("express");
 
 const connectToDatabase = require("./config/db");
-const Item = require("./models/Item");
+const { countAllowedUsers } = require("./lib/allowedUsers");
+const { isPlaceholderSessionSecret } = require("./lib/auth");
+const { loadAuthSession } = require("./middleware/auth");
+const authRoutes = require("./routes/auth");
 const itemRoutes = require("./routes/items");
-const { seedItemsIfNeeded } = require("./data/seedItems");
 
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/findit";
-const SHOULD_SEED_SAMPLE_DATA = String(process.env.SEED_SAMPLE_DATA || "true").trim().toLowerCase() !== "false";
 let startupPromise = null;
 
 function validateRuntimeConfig() {
@@ -19,6 +20,14 @@ function validateRuntimeConfig() {
 
   if (!MONGODB_URI.trim()) {
     issues.push("MONGODB_URI must be configured.");
+  }
+
+  if (isPlaceholderSessionSecret()) {
+    issues.push("SESSION_SECRET must be replaced with a long random secret.");
+  }
+
+  if (countAllowedUsers() === 0) {
+    issues.push("No allowed users found. Check data/allowedUsers.json.");
   }
 
   if (issues.length > 0) {
@@ -36,6 +45,7 @@ app.use(async (req, res, next) => {
     next(error);
   }
 });
+app.use(loadAuthSession);
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
@@ -56,10 +66,12 @@ app.get("/app.js", (req, res) => {
 app.get("/api/health", (req, res) => {
   res.json({
     message: "FindIt API is running.",
+    allowedUsers: countAllowedUsers(),
     timestamp: new Date().toISOString()
   });
 });
 
+app.use("/api/auth", authRoutes);
 app.use("/api/items", itemRoutes);
 
 app.use((req, res) => {
@@ -103,10 +115,6 @@ function ensureServerReady() {
     startupPromise = (async () => {
       validateRuntimeConfig();
       await connectToDatabase(MONGODB_URI);
-
-      if (SHOULD_SEED_SAMPLE_DATA) {
-        await seedItemsIfNeeded(Item);
-      }
     })();
   }
 

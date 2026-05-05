@@ -3,6 +3,8 @@ const MAX_PHOTO_SIZE = 2 * 1024 * 1024;
 
 const state = {
   activeTab: "all",
+  authUser: null,
+  allowedUsersCount: 0,
   editingId: null,
   items: [],
   requestId: 0,
@@ -313,7 +315,150 @@ function clearForm() {
   state.selectedPhotoData = "";
   state.selectedPhotoLabel = "Item photo";
 
+  if (state.authUser?.usn) {
+    document.getElementById("fContactName").value = state.authUser.usn;
+  }
+
   renderPhotoPreview();
+}
+
+function updateNavAuth() {
+  const navUserText = document.getElementById("navUserText");
+  const logoutButton = document.getElementById("logoutBtn");
+
+  if (!navUserText || !logoutButton) {
+    return;
+  }
+
+  if (state.authUser?.usn) {
+    navUserText.hidden = false;
+    logoutButton.hidden = false;
+    navUserText.textContent = `USN: ${state.authUser.usn}`;
+    return;
+  }
+
+  navUserText.hidden = true;
+  logoutButton.hidden = true;
+  navUserText.textContent = "";
+}
+
+function setAuthMessage(message, tone = "info") {
+  const messageElement = document.getElementById("authMessage");
+
+  if (!messageElement) {
+    return;
+  }
+
+  messageElement.textContent = message;
+  messageElement.className = `auth-message ${tone}`;
+}
+
+function showAuthGate(message) {
+  const gate = document.getElementById("authGate");
+
+  if (!gate) {
+    return;
+  }
+
+  gate.hidden = false;
+  gate.style.display = "flex";
+  document.body.classList.add("auth-locked");
+
+  if (message) {
+    setAuthMessage(message, "info");
+  }
+}
+
+function hideAuthGate() {
+  const gate = document.getElementById("authGate");
+
+  if (!gate) {
+    return;
+  }
+
+  gate.hidden = true;
+  gate.style.display = "none";
+  document.body.classList.remove("auth-locked");
+}
+
+function setAuthUser(user) {
+  state.authUser = user || null;
+  updateNavAuth();
+
+  if (state.authUser) {
+    hideAuthGate();
+    return;
+  }
+
+  showAuthGate("Log in with your USN and password to continue.");
+}
+
+function handleAuthRequired(message) {
+  state.items = [];
+  updateStats({ lost: 0, found: 0, resolved: 0, total: 0 });
+  setAuthUser(null);
+  setApiErrorState(message || "Please log in to view and manage posts.");
+}
+
+async function loadSession() {
+  const payload = await apiRequest("/auth/session");
+  state.allowedUsersCount = payload.allowedUsers || 0;
+  setAuthUser(payload.user || null);
+}
+
+async function submitLogin(event) {
+  event.preventDefault();
+
+  const usnInput = document.getElementById("loginUsn");
+  const passwordInput = document.getElementById("loginPassword");
+  const submitButton = document.getElementById("loginBtn");
+  const usn = usnInput.value.trim();
+  const password = passwordInput.value;
+
+  if (!usn || !password) {
+    setAuthMessage("Please enter both USN and password.", "warning");
+    return;
+  }
+
+  submitButton.disabled = true;
+  submitButton.textContent = "Signing In...";
+  setAuthMessage("Checking your credentials...", "info");
+
+  try {
+    await apiRequest("/auth/login", {
+      method: "POST",
+      body: { usn, password }
+    });
+
+    await loadSession();
+
+    if (!state.authUser?.usn) {
+      setAuthMessage("Login succeeded but session could not be restored. Please try again.", "error");
+      return;
+    }
+
+    passwordInput.value = "";
+    setAuthMessage(`Welcome ${state.authUser.usn}.`, "success");
+    showToast("Logged in successfully.", "success");
+    await renderCards();
+  } catch (error) {
+    setAuthMessage(error.message || "Could not log in.", "error");
+  } finally {
+    submitButton.disabled = false;
+    submitButton.textContent = "Log In";
+  }
+}
+
+async function logout() {
+  try {
+    await apiRequest("/auth/logout", {
+      method: "POST"
+    });
+  } catch (error) {
+    showToast(error.message || "Could not log out cleanly.", "error");
+  } finally {
+    handleAuthRequired("Logged out successfully. Please log in again.");
+  }
 }
 
 function paintCards(items) {
@@ -383,7 +528,7 @@ function paintCards(items) {
                   <button class="btn btn-secondary btn-sm" onclick="openEditModal('${item._id}')">Edit</button>
                   ${
                     item.status !== "resolved"
-                      ? `<button class="btn btn-found btn-sm" onclick="markResolved('${item._id}')">Mark Resolved</button>`
+                      ? `<button class="btn btn-found btn-sm" onclick="markCompleted('${item._id}')">Mark Completed</button>`
                       : ""
                   }
                   <button class="btn btn-danger btn-sm" onclick="deleteItem('${item._id}')">Delete</button>
@@ -400,6 +545,11 @@ function paintCards(items) {
 async function renderCards() {
   if (window.location.protocol === "file:") {
     setServerRequiredState();
+    return;
+  }
+
+  if (!state.authUser) {
+    showAuthGate("Log in with your USN and password to continue.");
     return;
   }
 
@@ -426,6 +576,11 @@ async function renderCards() {
       return;
     }
 
+    if (error.status === 401) {
+      handleAuthRequired(error.message);
+      return;
+    }
+
     setApiErrorState(error.message || "The server may be offline.");
 
     if (!state.toastShownForServerError) {
@@ -446,6 +601,11 @@ function setTab(button, filter) {
 }
 
 function openPostModal(type = "lost") {
+  if (!state.authUser) {
+    showAuthGate("Please log in before posting an item.");
+    return;
+  }
+
   state.editingId = null;
   state.selectedType = type === "found" ? "found" : "lost";
 
@@ -486,7 +646,7 @@ async function openEditModal(id) {
     const item = await getItem(id);
 
     if (!item.isOwner) {
-      showToast("Only the person who posted this item can edit it from their original browser.", "error");
+      showToast("Only the user who posted this item can edit it.", "error");
       return;
     }
 
@@ -512,6 +672,11 @@ async function openEditModal(id) {
     renderPhotoPreview();
     document.getElementById("postOverlay").classList.add("active");
   } catch (error) {
+    if (error.status === 401) {
+      handleAuthRequired(error.message);
+      return;
+    }
+
     showToast(error.message || "Could not load the item.", "error");
   }
 }
@@ -567,6 +732,11 @@ async function submitPost() {
     closePostModal();
     await renderCards();
   } catch (error) {
+    if (error.status === 401) {
+      handleAuthRequired(error.message);
+      return;
+    }
+
     showToast(error.message || "Could not save the item.", "error");
   } finally {
     submitButton.disabled = false;
@@ -644,18 +814,23 @@ async function openDetail(id) {
               <button class="btn btn-secondary" onclick="closeDetailModal(); openEditModal('${item._id}')">Edit Item</button>
               ${
                 item.status !== "resolved"
-                  ? `<button class="btn btn-found" onclick="closeDetailModal(); markResolved('${item._id}')">Mark Resolved</button>`
+                  ? `<button class="btn btn-found" onclick="closeDetailModal(); markCompleted('${item._id}')">Mark Completed</button>`
                   : ""
               }
               <button class="btn btn-danger" onclick="closeDetailModal(); deleteItem('${item._id}')">Delete</button>
             </div>
           `
-          : `<p class="detail-owner-note">Only the original poster can edit or resolve this item.</p>`
+          : `<p class="detail-owner-note">Only the user who posted this item can edit, complete, or delete it.</p>`
       }
     `;
 
     document.getElementById("detailOverlay").classList.add("active");
   } catch (error) {
+    if (error.status === 401) {
+      handleAuthRequired(error.message);
+      return;
+    }
+
     showToast(error.message || "Could not load the item.", "error");
   }
 }
@@ -680,18 +855,28 @@ async function deleteItem(id) {
     showToast("Item deleted.", "info");
     await renderCards();
   } catch (error) {
+    if (error.status === 401) {
+      handleAuthRequired(error.message);
+      return;
+    }
+
     showToast(error.message || "Could not delete the item.", "error");
   }
 }
 
-async function markResolved(id) {
+async function markCompleted(id) {
   try {
-    await apiRequest(`/items/${id}/resolve`, {
+    await apiRequest(`/items/${id}/complete`, {
       method: "PATCH"
     });
-    showToast("Item marked as resolved.", "success");
+    showToast("Item marked as completed.", "success");
     await renderCards();
   } catch (error) {
+    if (error.status === 401) {
+      handleAuthRequired(error.message);
+      return;
+    }
+
     showToast(error.message || "Could not update the item.", "error");
   }
 }
@@ -722,10 +907,11 @@ function showToast(message, type = "info") {
 
 function showHowItWorks() {
   const steps = [
+    "Log in with your allowed USN and password.",
     "Post a lost or found item with a clear photo and details.",
     "The college community searches and filters the board to match reports quickly.",
     "People connect using the contact details on the listing.",
-    "Only the original browser that posted an item can edit, resolve, or delete that item."
+    "Only the same USN that posted an item can edit, complete, or delete that item."
   ];
 
   document.getElementById("detailModalTitle").textContent = "How FindIt Works";
@@ -745,7 +931,7 @@ function showHowItWorks() {
     </div>
     <div style="margin-top:20px;padding:14px;background:var(--accent-dim-soft);border:1px solid var(--border-accent);border-radius:var(--radius-sm);">
       <p style="font-size:0.82rem;color:var(--accent-light);font-weight:600;margin-bottom:6px;">COMMUNITY FLOW</p>
-      <p style="font-size:0.85rem;color:var(--text-secondary);line-height:1.6;">This board runs on Express + MongoDB, and ownership protection prevents one user from deleting or editing another user&apos;s post.</p>
+      <p style="font-size:0.85rem;color:var(--text-secondary);line-height:1.6;">This board runs on Express + MongoDB with USN login and server-side ownership checks for every edit, complete, and delete action.</p>
     </div>
     <button class="btn btn-primary" style="margin-top:20px;width:100%;" onclick="closeDetailModal()">Got It</button>
   `;
@@ -762,6 +948,12 @@ document.addEventListener("keydown", (event) => {
 async function initApp() {
   updateReportTypeDisplay();
   renderPhotoPreview();
+  updateNavAuth();
+  const loginForm = document.getElementById("loginForm");
+
+  if (loginForm) {
+    loginForm.addEventListener("submit", submitLogin);
+  }
 
   if (window.location.protocol === "file:") {
     setServerRequiredState();
@@ -769,8 +961,19 @@ async function initApp() {
   }
 
   try {
-    await renderCards();
+    await loadSession();
+
+    if (state.authUser) {
+      await renderCards();
+      return;
+    }
+
+    const countLabel = state.allowedUsersCount ? `${state.allowedUsersCount.toLocaleString()} users allowed.` : "Allowed users list loaded.";
+    setAuthMessage(`Enter your USN and password. ${countLabel}`, "info");
+    showAuthGate("Log in with your USN and password to continue.");
   } catch (error) {
+    setAuthMessage(error.message || "Could not connect to the server.", "error");
+    showAuthGate(error.message || "Could not connect to the server.");
     setApiErrorState(error.message || "Could not connect to the server.");
   }
 }

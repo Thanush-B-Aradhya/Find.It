@@ -2,6 +2,7 @@ const Session = require("../models/Session");
 const {
   SESSION_COOKIE_NAME,
   hashSessionToken,
+  normalizeUsn,
   parseCookies,
   serializeCookie
 } = require("../lib/auth");
@@ -22,16 +23,18 @@ async function loadAuthSession(req, res, next) {
     const session = await Session.findOne({
       tokenHash: hashSessionToken(rawToken),
       expiresAt: { $gt: new Date() }
-    }).populate("userId");
+    });
 
-    if (!session || !session.userId) {
+    if (!session || !session.usn) {
       clearSessionCookie(res);
       next();
       return;
     }
 
     req.authSession = session;
-    req.authUser = session.userId;
+    req.authUser = {
+      usn: normalizeUsn(session.usn)
+    };
     next();
   } catch (error) {
     next(error);
@@ -41,7 +44,7 @@ async function loadAuthSession(req, res, next) {
 function requireAuth(req, res, next) {
   if (!req.authUser) {
     res.status(401).json({
-      message: "Please sign in with your college Google account to continue."
+      message: "Please sign in with your USN and password to continue."
     });
     return;
   }

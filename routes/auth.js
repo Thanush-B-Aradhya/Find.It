@@ -3,14 +3,13 @@ const express = require("express");
 const {
   buildSafeUser,
   createSessionToken,
-  getAllowedEmailDomain,
   getSessionDurationMs,
-  hashSessionToken
+  hashSessionToken,
+  normalizeUsn
 } = require("../lib/auth");
-const { getGoogleClientId, isGoogleAuthConfigured, verifyGoogleCredential } = require("../lib/googleAuth");
+const { countAllowedUsers, isAllowedCredential } = require("../lib/allowedUsers");
 const { clearSessionCookie, setSessionCookie } = require("../middleware/auth");
 const Session = require("../models/Session");
-const User = require("../models/User");
 
 const router = express.Router();
 
@@ -30,13 +29,12 @@ function isTrustedOrigin(req) {
 
 router.get("/session", async (req, res) => {
   res.json({
-    allowedEmailDomain: getAllowedEmailDomain(),
-    googleClientId: getGoogleClientId(),
+    allowedUsers: countAllowedUsers(),
     user: buildSafeUser(req.authUser)
   });
 });
 
-router.post("/google", async (req, res, next) => {
+router.post("/login", async (req, res, next) => {
   try {
     if (!isTrustedOrigin(req)) {
       res.status(403).json({
@@ -45,40 +43,22 @@ router.post("/google", async (req, res, next) => {
       return;
     }
 
-    if (!isGoogleAuthConfigured()) {
-      res.status(503).json({
-        message: "Google sign-in is not configured yet. Add GOOGLE_CLIENT_ID on the server."
+    const usn = normalizeUsn(req.body?.usn);
+    const password = String(req.body?.password || "");
+
+    if (!usn || !password) {
+      res.status(400).json({
+        message: "Please enter both USN and password."
       });
       return;
     }
 
-    const googleProfile = await verifyGoogleCredential(req.body.credential);
-    let user = await User.findOne({ googleSub: googleProfile.googleSub });
-
-    if (!user) {
-      user = await User.findOne({ email: googleProfile.email });
-    }
-
-    if (user && user.googleSub && user.googleSub !== googleProfile.googleSub) {
-      res.status(409).json({
-        message: "This college email is already linked to a different Google account. Contact the admin."
+    if (!isAllowedCredential(usn, password)) {
+      res.status(401).json({
+        message: "Invalid USN or password. Only listed USNs can log in."
       });
       return;
     }
-
-    if (!user) {
-      user = new User();
-    }
-
-    user.set({
-      avatarUrl: googleProfile.avatarUrl,
-      displayName: googleProfile.name,
-      email: googleProfile.email,
-      googleSub: googleProfile.googleSub,
-      lastLoginAt: new Date()
-    });
-
-    await user.save();
 
     if (req.authSession) {
       await Session.deleteOne({ _id: req.authSession._id });
@@ -88,23 +68,16 @@ router.post("/google", async (req, res, next) => {
     await Session.create({
       expiresAt: new Date(Date.now() + getSessionDurationMs()),
       tokenHash: hashSessionToken(rawToken),
-      userId: user._id
+      usn
     });
 
     setSessionCookie(res, rawToken);
 
     res.json({
       message: "Signed in successfully.",
-      user: buildSafeUser(user)
+      user: buildSafeUser({ usn })
     });
   } catch (error) {
-    if (error.status) {
-      res.status(error.status).json({
-        message: error.message
-      });
-      return;
-    }
-
     next(error);
   }
 });

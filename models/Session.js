@@ -7,10 +7,13 @@ const sessionSchema = new mongoose.Schema(
       required: true,
       unique: true
     },
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true
+    usn: {
+      type: String,
+      required: true,
+      uppercase: true,
+      trim: true,
+      maxlength: 40,
+      index: true
     },
     expiresAt: {
       type: Date,

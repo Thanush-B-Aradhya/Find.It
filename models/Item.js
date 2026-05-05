@@ -23,22 +23,17 @@ const itemSchema = new mongoose.Schema(
       enum: ["open", "resolved"],
       default: "open"
     },
-    ownerId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null,
-      index: true
-    },
     ownerEmail: {
       type: String,
       trim: true,
       lowercase: true,
       maxlength: 120
     },
-    ownerTokenHash: {
+    ownerUsn: {
       type: String,
+      uppercase: true,
       trim: true,
-      maxlength: 64,
+      maxlength: 40,
       index: true
     },
     photoData: {
