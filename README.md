@@ -34,12 +34,24 @@ Your `.gitignore` excludes `.env`, so secrets are not pushed.
 
 ## Environment Variables
 
-Required keys:
-- `NODE_ENV` (`development` or `production`)
+Local keys:
+- `NODE_ENV` (`development`)
 - `PORT` (example: `5000`)
-- `MONGODB_URI` (Mongo connection string)
+- `MONGODB_URI` (Mongo connection string, local default: `mongodb://127.0.0.1:27017/findit`)
 - `SESSION_SECRET` (long random secret string)
 - `SESSION_DAYS` (session duration, e.g. `7`)
+
+## Vercel Environment Variables
+
+In Vercel, add these under Project Settings -> Environment Variables:
+
+- `MONGODB_URI`: hosted MongoDB connection string, for example from MongoDB Atlas. Do not use `127.0.0.1` or `localhost` on Vercel.
+- `SESSION_SECRET`: a long random secret string. Do not use the placeholder from `.env.example`.
+- `SESSION_DAYS`: optional session duration, for example `7`.
+
+You do not need to add `PORT` on Vercel. Vercel supplies the runtime port. You also usually do not need to add `NODE_ENV`; Vercel runs production deployments with production settings.
+
+If you use MongoDB Atlas, make sure the database user exists and Network Access allows Vercel to connect. For a quick student-project setup, Atlas Network Access commonly uses `0.0.0.0/0`, but restrict it more tightly if your deployment setup supports that.
 
 ## Directory Guide
 
